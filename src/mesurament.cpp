@@ -12,6 +12,7 @@
 // (may be even less - try to avoid IRQ effects...)
 const long NUM_OF_TESTS = 1024*256;
 const long NUM_OF_RDTSC_TESTS = 1024*256;
+const long NUM_OF_COMPARE_TESTS = 1024*256;
 
 
 struct CTX
@@ -103,6 +104,31 @@ unsigned GetRdtscLatency(int verbose_mode, long max_cpu_freq_in_hz)
     return CalcMediana("RDTSC", results, NUM_OF_RDTSC_TESTS, max_cpu_freq_in_hz, verbose_mode);
 }
 
+unsigned GetCompareLatency(int verbose_mode, long max_cpu_freq_in_hz)
+{
+    unsigned befor_time = 0;
+    unsigned befor_time_hi = 0;
+    unsigned after_time = 0;
+    unsigned after_time_hi = 0;
+
+    auto results = new unsigned[NUM_OF_COMPARE_TESTS];
+
+    for(long i = 0; i < NUM_OF_COMPARE_TESTS; ++i)
+    {
+        // Get time by rdtsc instruction and save it
+        __asm__ __volatile__ ("rdtsc" : "=a"(befor_time), "=d"(befor_time_hi));
+        while(i == -1)
+        {
+            continue;
+        }
+        __asm__ __volatile__ ("rdtsc" : "=a"(after_time), "=d"(after_time_hi));
+        results[i] = after_time - befor_time;
+    }
+
+
+
+    return CalcMediana("COMPARE", results, NUM_OF_RDTSC_TESTS, max_cpu_freq_in_hz, verbose_mode);
+}
 int do_mesurament(int verbose_mode)
 {
     if(!CheckHardware())
@@ -122,6 +148,13 @@ int do_mesurament(int verbose_mode)
     if(rdtsc_latency == 0)
     {
         std::cerr << "ERROR: faile to get rdtsc_latency!" << std::endl;
+        return 1;
+    }
+
+    auto compare_latency = GetCompareLatency(verbose_mode, max_cpu_freq_in_hz);
+    if(compare_latency == 0)
+    {
+        std::cerr << "ERROR: faile to get compare_latency!" << std::endl;
         return 1;
     }
 
@@ -169,9 +202,10 @@ int do_mesurament(int verbose_mode)
     if(verbose_mode > 0)
     {
         std::cout <<"RDTSC_MEDIANA : " << Tick2String(rdtsc_latency, max_cpu_freq_in_hz, verbose_mode) << std::endl;
-        std::cout <<"MEDIANA_WITH_RDTSC : " << Tick2String(cache_latency, max_cpu_freq_in_hz, verbose_mode) << std::endl;
+        std::cout <<"COMPARE_AND_RDTSC_MEDIANA : " << Tick2String(compare_latency, max_cpu_freq_in_hz, verbose_mode) << std::endl;
+        std::cout <<"MEDIANA_WITH_COMPARE_AND_RDTSC : " << Tick2String(cache_latency, max_cpu_freq_in_hz, verbose_mode) << std::endl;
     }
-    std::cout <<"MEDIANA : " << Tick2String(cache_latency - rdtsc_latency, max_cpu_freq_in_hz, verbose_mode) << std::endl;
+    std::cout <<"MEDIANA : " << Tick2String(cache_latency - compare_latency, max_cpu_freq_in_hz, verbose_mode) << std::endl;
 
     delete[] ctx->results;
     delete ctx;
